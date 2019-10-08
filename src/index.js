@@ -11,19 +11,34 @@ function csvToArray(csv = '') {
 }
 
 class FileHeaderPreview extends Component {
+  state = { headerRow: 0 }
+
+  handleClick = rowIndex => {
+    return () => {
+      this.props.onRowChange(rowIndex);
+    }
+  }
+
   render() {
     return (
-      <table>
-        {this.props.cells.map(row => {
-          return (
-            <tr>
-              {row.map(cell => {
-                return <td>{cell}</td>
-              })}
-            </tr>
-          )
-        })}
-      </table>
+      <div>
+        <p>Which row is the header in?</p>
+
+        <table>
+          {this.props.cells.map((row, rowIndex) => {
+            return (
+              <tr>
+                {row.map(cell => {
+                  const highlightStyle = { backgroundColor: '#dce7ff' };
+                  const isHighlighted = rowIndex === this.props.selectedRow;
+
+                  return <td onClick={this.handleClick(rowIndex)} style={isHighlighted && highlightStyle}>{cell}</td>
+                })}
+              </tr>
+            )
+          })}
+        </table>
+      </div>
     );
   }
 }
@@ -59,18 +74,23 @@ class FileInput extends Component {
 
 class App extends Component {
   state = {
-    fileContent: undefined
+    fileContent: undefined,
+    headerRow: 0
   };
 
   handleFileLoad = fileContent => {
     this.setState({ fileContent });
   }
 
+  handleRowChange = rowIndex => {
+    this.setState({ headerRow: rowIndex });
+  }
+
   render() {
-    const { fileContent } = this.state;
+    const { fileContent, headerRow } = this.state;
     if (fileContent) {
       const tableContent = csvToArray(fileContent);
-      return <FileHeaderPreview cells={tableContent} />
+      return <FileHeaderPreview cells={tableContent} selectedRow={headerRow} onRowChange={this.handleRowChange} />
     } else {
       return <FileInput onFileLoad={this.handleFileLoad} />
     }
