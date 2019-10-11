@@ -1,13 +1,5 @@
 import { render, h, Component } from 'preact';
 
-/*
-What data do we need to send to backend?
-* We need the file
-* Where the header column starts
-* What columns we want from the source files?
-* For those selected columns, what name and order do we need?
-*/
-
 function csvToArray(csv = '') {
   const rows = csv.split('\n');
   const result = [];
@@ -41,7 +33,7 @@ class FileMapper extends Component {
   }
 
   render() {
-    const { cells } = this.props;
+    const { cells, columnNameMap } = this.props;
     const transformedCells = transformCells(cells);
 
     return (
@@ -49,7 +41,7 @@ class FileMapper extends Component {
         {transformedCells.map((column, columnIndex) => {
           return (
             <div>
-              <input type="text" onInput={this.handleChange(columnIndex)}/>
+              <input type="text" value={columnNameMap[columnIndex]} onInput={this.handleChange(columnIndex)}/>
               <table>
                 {column.map((cell, index) => {
                   return <tr style={index === 0 && { backgroundColor: '#dce7ff'}}><td>{cell}</td></tr>
@@ -108,7 +100,6 @@ class FileInput extends Component {
     const reader = new FileReader();
     reader.onload = e => {
       const fileContent = e.target.result;
-      console.log(fileContent);
       console.timeEnd('starting to read file');
       this.props.onFileLoad({
         fileContent: fileContent,
@@ -167,6 +158,14 @@ class App extends Component {
     });
   }
 
+  saveMapper = () => {
+    const items = localStorage.getItem('userMapping') ?
+      JSON.parse(localStorage.getItem('userMapping')) : [];
+    items.push(this.state.columnNameMap);
+
+    localStorage.setItem('userMapping', JSON.stringify(items));
+  }
+
   bingo = () => {
     const URL = `http://localhost:3000/file`;
     const formData = new FormData();
@@ -180,7 +179,6 @@ class App extends Component {
     })
     .then(response => response.json())
     .then(data => {
-      console.log(data);
       if (data.newFile) {
         this.setState({
           outputFile: data.newFile
@@ -189,9 +187,14 @@ class App extends Component {
     })
   }
 
+  useMap = map => () => {
+    this.setState({
+      columnNameMap: map
+    });
+  }
+
   render() {
     const { fileContent, headerRow } = this.state;
-    console.log(fileContent);
 
     if (this.state.outputFile) {
       return <a href="http://localhost:3000/outputs/info-1570812534936.csv">Download output file</a>
@@ -207,10 +210,24 @@ class App extends Component {
         );
       } else if (this.state.page === 1) {
         const sliceTableContent = fileContent.slice(headerRow);
+        const mapping = localStorage.getItem('userMapping') ?
+          JSON.parse(localStorage.getItem('userMapping')) :
+          [];
         return (
           <div>
-            <button onClick={this.goToMapper(2)}>Continue</button>
-            <FileMapper cells={sliceTableContent} onChange={this.handleColumnMapChange} />
+            <h2>Previous user mappings</h2>
+            {mapping.map((map, index) => {
+              return <button onClick={this.useMap(map)}>Use this mapping: {index}</button>
+            })}
+            <button onClick={() => {
+              this.goToMapper(2)();
+            }}>Continue</button>
+            <button onClick={this.saveMapper}>Save mapping for future use</button>
+            <FileMapper
+              cells={sliceTableContent}
+              onChange={this.handleColumnMapChange}
+              columnNameMap={this.state.columnNameMap}
+            />
           </div>
         )
       } else if (this.state.page === 2) {
