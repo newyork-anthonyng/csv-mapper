@@ -36,10 +36,6 @@ function transformCells(cells) {
 }
 
 class FileMapper extends Component {
-  state = {
-    columnMappingNames: {}
-  }
-
   handleChange = columnIndex => e => {
     this.props.onChange(columnIndex)(e);
   }
@@ -112,9 +108,15 @@ class FileInput extends Component {
     const reader = new FileReader();
     reader.onload = e => {
       const fileContent = e.target.result;
-      this.props.onFileLoad(fileContent);
+      console.log(fileContent);
+      console.timeEnd('starting to read file');
+      this.props.onFileLoad({
+        fileContent: fileContent,
+        rawFile: file
+      });
     };
     reader.readAsText(file);
+    console.time('starting to read file');
     console.log('starting to read file');
   }
 
@@ -132,14 +134,19 @@ class FileInput extends Component {
 class App extends Component {
   state = {
     fileContent: undefined,
+    rawFile: null,
     headerRow: 0,
     page: 0,
-    columnNameMap: {}
+    columnNameMap: {},
+    outputFile: null
   };
 
-  handleFileLoad = fileContent => {
+  handleFileLoad = ({ fileContent, rawFile }) => {
     const tableContent = csvToArray(fileContent);
-    this.setState({ fileContent: tableContent.slice(0, 50) });
+    this.setState({
+      fileContent: tableContent.slice(0, 10),
+      rawFile: rawFile
+    });
   }
 
   handleRowChange = rowIndex => {
@@ -154,30 +161,108 @@ class App extends Component {
     });
   }
 
-  goToMapper = () => {
+  goToMapper = page => () => {
     this.setState({
-      page: 1
+      page
     });
+  }
+
+  bingo = () => {
+    const URL = `http://localhost:3000/file`;
+    const formData = new FormData();
+    formData.append('info', this.state.rawFile);
+    formData.append('columnNameMap', JSON.stringify(this.state.columnNameMap));
+    formData.append('headerRow', this.state.headerRow);
+
+    fetch(URL, {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log(data);
+      if (data.newFile) {
+        this.setState({
+          outputFile: data.newFile
+        });
+      }
+    })
   }
 
   render() {
     const { fileContent, headerRow } = this.state;
+    console.log(fileContent);
+
+    if (this.state.outputFile) {
+      return <a href="http://localhost:3000/outputs/info-1570812534936.csv">Download output file</a>
+    }
 
     if (fileContent) {
       if (this.state.page === 0) {
         return (
           <div>
             <FileHeaderPreview cells={fileContent} selectedRow={headerRow} onRowChange={this.handleRowChange} />
-            <button onClick={this.goToMapper}>Continue</button>
+            <button onClick={this.goToMapper(1)}>Continue</button>
           </div>
         );
       } else if (this.state.page === 1) {
-        const sliceTableContent = tableContent.slice(headerRow);
+        const sliceTableContent = fileContent.slice(headerRow);
         return (
           <div>
+            <button onClick={this.goToMapper(2)}>Continue</button>
             <FileMapper cells={sliceTableContent} onChange={this.handleColumnMapChange} />
           </div>
         )
+      } else if (this.state.page === 2) {
+        // preview page. This is where user can reorder columns as they please
+        const columnNameMap = this.state.columnNameMap;
+        const selectedRows = [[]];
+
+        for (let prop in columnNameMap) {
+          if (columnNameMap.hasOwnProperty(prop)) {
+            selectedRows[0].push(columnNameMap[prop]);
+          }
+        }
+        for (let i = this.state.headerRow; i < fileContent.length; i++) {
+          const currentRow = fileContent[i];
+
+          const currentRowResult = [];
+          for (let j = 0; j < currentRow.length; j++) {
+            const isSelected = typeof columnNameMap[j] !== 'undefined';
+
+            if (isSelected) {
+              currentRowResult.push(currentRow[j]);
+            }
+          }
+
+          selectedRows.push(currentRowResult);
+        }
+
+        return (
+          <div>
+            <h1>Does everything look good?</h1>
+            <button onClick={this.bingo}>Submit</button>
+            <div>
+              <table>
+                {selectedRows.map((row, index) => {
+                  if (index === 0) {
+                    return <tr>{row.map(data => {
+                      return <td>New mapping name: {data}</td>
+                    })}</tr>
+                  } else if (index === 1) {
+                    return <tr>{row.map(data => {
+                      return <td>Old mapping name: {data}</td>
+                    })}</tr>
+                  } else {
+                    return <tr>{row.map(data => {
+                      return <td>{data}</td>
+                    })}</tr>
+                  }
+                })}
+              </table>
+            </div>
+          </div>
+        );
       }
     } else {
       return <FileInput onFileLoad={this.handleFileLoad} />
